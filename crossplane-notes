@@ -1,0 +1,10 @@
+vpcIdSelector:
+  matchControllerRef: true
+
+
+initProvider:
+  scalingConfig:
+    - desiredSize: 1
+
+
+go-templating range loop doesn't delete composed resources when xr is updated -todo fix

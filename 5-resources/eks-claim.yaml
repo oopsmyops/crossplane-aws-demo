@@ -1,0 +1,49 @@
+---
+# MyVPC: An instance of the custom resource defined above.
+apiVersion: aws.cloud.iac/v1alpha1
+kind: EKSClaim
+metadata:
+  name: crossplane-eks-cluster  # Name of the custom resource instance
+  namespace: default
+spec:
+  name: crossplane-eks-cluster  # ID of the VPC
+  region: us-east-1  # Region value to be used by the Composition
+  version: "1.32"  # Version of the EKS Cluster
+  subnetSelector:  # Label to select the subnets for the EKS Cluster
+    crossplane-vpc: private
+  nodegroups:
+    - name: nodegroup-1
+      instanceType: t3.medium
+      minSize: 2
+      maxSize: 6
+      desiredSize: 2
+      diskSize: 20
+      labels:
+        nodegroup: nodegroup-1
+  accessEntries:
+    - principalArn: "arn:aws:iam::<ACCOUNT_ID>:user/user1"
+      policyArn: "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+    - principalArn: "arn:aws:iam::<ACCOUNT_ID>:user/user2"
+      policyArn: "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  managedAddons:
+    - name: vpc-cni
+      version: "v1.19.2-eksbuild.1" # Version of the managed addon (optional)
+      configurationValues: '{"env": {"ENABLE_PREFIX_DELEGATION":"true"}}'
+    - name: kube-proxy
+      version: "v1.32.0-eksbuild.2" # Version of the managed addon (optional)
+    - name: coredns
+      version: "v1.11.4-eksbuild.2" # Version of the managed addon (optional)
+      # configurationValues: '{"replicaCount": 1}'
+    - name: metrics-server
+      # configurationValues: '{"replicas": 1}'
+  # externalAddons:
+  #   - name: aws-load-balancer-controller
+  #     version: "1.11.0" # Version of the external addon (optional)
+  #     values:
+  #       # clusterName: crossplane-eks-cluster # Auto added
+  #       # region: us-east-1 # Auto added
+  #       # vpcID: vpc-0a1b2c3d4e5f6g7h8 # Auto added
+  tags:  # Tags to be applied to the VPC and other resources
+    created_by: oopsmyops
+    project_name: poc
+    # creation_date: 30-12-24 # will be auto added

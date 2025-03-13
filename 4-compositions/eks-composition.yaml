@@ -1,0 +1,277 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  labels:
+    provider: aws
+  name: xclusters.aws.cloud.iac
+spec:
+  compositeTypeRef:
+    apiVersion: aws.cloud.iac/v1alpha1
+    kind: XCluster
+  mode: Pipeline
+  pipeline:
+    - step: create-eks-cluster
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: iam.aws.upbound.io/v1beta1
+            kind: Role
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-control-plane-role
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-cluster-role"
+            spec:
+              forProvider:
+                forceDetachPolicies: true
+                managedPolicyArns:
+                  - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+                assumeRolePolicy: |
+                  {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "eks.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                  }
+                tags: 
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  Name : {{ $.observed.composite.resource.spec.name }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta2
+            kind: Cluster
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}"
+            spec:
+              forProvider:
+                accessConfig:
+                  authenticationMode: API_AND_CONFIG_MAP
+                  bootstrapClusterCreatorAdminPermissions: true
+                region: {{ .observed.composite.resource.spec.region }}
+                version: "{{ .observed.composite.resource.spec.version }}"
+                roleArnRef:
+                  name: {{ .observed.composite.resource.spec.name }}-control-plane-role
+                vpcConfig:
+                  endpointPrivateAccess: true
+                  endpointPublicAccess: false
+                  # publicAccessCidrs:  # add public ip from the shell function
+                  subnetIdSelector:
+                    matchLabels:
+                      {{ range $key, $value := .observed.composite.resource.spec.subnetSelector }}
+                        {{ $key }}: {{ $value }}
+                      {{ end }}
+                # remoteNetworkConfig:
+                #   remoteNodeNetworks:
+                #     cidrs:
+                #       - 172.16.0.0/12
+                tags: 
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  Name : {{ $.observed.composite.resource.spec.name }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+    - step: create-nodegroup
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: iam.aws.upbound.io/v1beta1
+            kind: Role
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nodegroup-role
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nodegroup-role"
+            spec:
+              forProvider:
+                forceDetachPolicies: true
+                managedPolicyArns:
+                  - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+                  - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+                  - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+                assumeRolePolicy: |
+                  {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "sts:AssumeRole"
+                            ]
+                        }
+                    ]
+                  }
+                tags: 
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  Name : {{ $.observed.composite.resource.spec.name }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{/* Nodegroup */}}
+            {{- range .observed.composite.resource.spec.nodegroups }}
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta2
+            kind: NodeGroup
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}"
+            spec:
+              forProvider:
+                capacityType: SPOT
+                clusterNameSelector:
+                  matchControllerRef: true
+                nodeRoleArnRef:
+                  name: {{ $.observed.composite.resource.spec.name }}-nodegroup-role
+                region: {{ $.observed.composite.resource.spec.region }}
+                instanceTypes:
+                  - {{ .instanceType | default "t3.micro" }}
+                diskSize: {{ .diskSize | default "20" }}
+                forceUpdateVersion: true
+                subnetIdSelector:
+                  matchLabels:
+                    {{ range $key, $value := $.observed.composite.resource.spec.subnetSelector }}
+                      {{ $key }}: {{ $value }}
+                    {{ end }}
+                labels:
+                  {{- range $key, $value := .labels }}
+                  {{ $key }}: {{ $value }}
+                  {{- end }}
+                scalingConfig:
+                  minSize: {{ .minSize | default 1 }}
+                  maxSize: {{ .maxSize | default 3 }}
+                tags:
+                  Name : {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+                {{range $key, $value := $.observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+                scalingConfig:
+                  desiredSize: {{ .desiredSize | default 1 }}
+            {{- end }}
+
+    - step: create-access-entry
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- range .observed.composite.resource.spec.accessEntries }}
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta1
+            kind: AccessEntry
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}"
+              labels:
+                {{ $.observed.composite.resource.spec.name }}: "{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}"
+            spec:
+              forProvider:
+                clusterNameSelector:
+                  matchControllerRef: true
+                principalArn: {{ .principalArn }}
+                region: {{ $.observed.composite.resource.spec.region }}
+                type: STANDARD
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta1
+            kind: AccessPolicyAssociation
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}-access-policy
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}-access-policy"
+            spec:
+              forProvider:
+                accessScope:
+                  type: cluster
+                clusterNameSelector:
+                  matchControllerRef: true
+                policyArn: "{{ .policyArn }}"
+                principalArnSelector:
+                  matchLabels:
+                    {{ $.observed.composite.resource.spec.name }}: "{{ (index (splitList "/" .principalArn) 1 | splitList "@" | first) }}"
+                region: {{ $.observed.composite.resource.spec.region }}
+            {{- end }}
+
+    - step: create-managed-addons
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{/* Managed Addons */}}
+            {{- range .observed.composite.resource.spec.managedAddons }}
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta1
+            kind: Addon
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}"
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+            spec:
+              forProvider:
+                addonName: {{ .name }}
+                {{- if .version }}
+                addonVersion: "{{ .version }}"
+                {{- end }}
+                clusterNameRef:
+                  name: {{ $.observed.composite.resource.spec.name }}
+                region: {{ $.observed.composite.resource.spec.region }}
+                {{- if .configurationValues }}
+                configurationValues: '{{ .configurationValues }}'
+                {{- end }}
+                tags: 
+                  Name : {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+                {{range $key, $value := $.observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{- end }}
+  
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: function-auto-ready

@@ -1,0 +1,152 @@
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: function-shell-drc
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      replicas: 1
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              volumeMounts:
+              - name: aws-credentials
+                mountPath: /.aws/  # or /home/<your_user>/.aws, depending on user in container
+                readOnly: true # Credentials shouldn't be written to from the container
+          volumes:
+            - name: aws-credentials
+              secret:
+                secretName: aws-secret # Name of the secret you created
+                items:
+                - key: creds
+                  path: credentials  # This creates /root/.aws/credentials file
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-shell
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-shell:v0.3.0
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: function-shell-drc
+---
+# CompositeResourceDefinition: Defines a new custom resource type.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatas.aws.cloud.iac  # Name of the custom resource definition
+spec:
+  group: aws.cloud.iac  # API group for the custom resource
+  names:
+    kind: XData  # Kind of the custom resource
+    plural: xdatas  # Plural name of the custom resource
+  versions:
+  - name: v1alpha1  # available versions: v1alpha1, v1beta1, v1
+    served: true  # Indicates if this version is served by the API server
+    referenceable: true  # Indicates if this version can be referenced
+    schema:
+      openAPIV3Schema:
+        type: object  # Type of the schema
+        properties:
+          spec:
+            type: object  # Type of the spec
+            properties:
+              name:
+                type: string  # Type of the name property
+                description: Wildcard name of the AMI
+              region:
+                type: string  # Type of the region property
+                description: AWS region
+              owner:
+                type: string  # Type of the owner property
+                description: AWS account ID or alias
+          status:
+            properties:
+              atFunction:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              outputs:
+                type: object
+                description: Outputs from the function
+                additionalProperties:
+                  type: string
+
+
+---
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: shell-example
+spec:
+  compositeTypeRef:
+    apiVersion: aws.cloud.iac/v1alpha1
+    kind: XData
+  mode: Pipeline
+  pipeline:
+    - step: shell
+      functionRef:
+        name: function-shell
+      input:
+        apiVersion: shell.fn.crossplane.io/v1alpha1
+        kind: Parameters
+        shellEnvVars:
+          - key: AWS_DEFAULT_REGION
+            valueRef: spec.region
+          - key: name
+            valueRef: spec.name
+          - key: owner
+            valueRef: spec.owner
+        shellCommand: |
+          nat_ami_id=$(aws ec2 describe-images --owners $owner --filters "Name=name,Values=${name}" --query 'Images | sort_by(@, &CreationDate) | [-1].[ImageId]' --output text)
+          my_pub_ip=$(curl -sL checkip.amazonaws.com)
+          echo "$nat_ami_id,$my_pub_ip"
+        stdoutField: status.atFunction.shell.stdout
+        stderrField: status.atFunction.shell.stderr
+    - step: go-templating
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: apiextensions.crossplane.io/v1beta1
+            kind: EnvironmentConfig
+            metadata:
+              name: {{ .observed.composite.resource.metadata.name }}-ec
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.metadata.name }}-ec"
+                gotemplating.fn.crossplane.io/ready: "True"
+            data:
+            {{- if .observed.composite.resource.status.atFunction.shell.stdout }}
+              outputs:
+                amiId: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 0) }}
+                publicIP: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 1) }}
+            {{- end }}
+            # ---
+            # apiVersion: {{ .observed.composite.resource.apiVersion }}
+            # kind: {{ .observed.composite.resource.kind }}
+            # metadata:
+            #   name: {{ .observed.composite.resource.metadata.name }}
+            # status:
+            # {{- if .observed.composite.resource.status.atFunction.shell.stdout }}
+            #   outputs:
+            #     amiId: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 0) }}
+            #     publicIP: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 1) }}
+            # {{- end }}
+---
+apiVersion: aws.cloud.iac/v1alpha1
+kind: XData
+metadata:
+  name: example-aws
+spec:
+  name: "fck-nat-al2023-*"
+  region: us-east-1
+  owner: "568608671756"

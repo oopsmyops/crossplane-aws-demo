@@ -1,0 +1,109 @@
+# CompositeResourceDefinition: Defines a new custom resource type.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xclusters.aws.cloud.iac  # Name of the custom resource definition
+spec:
+  group: aws.cloud.iac  # API group for the custom resource
+  names:
+    kind: XCluster  # Kind of the custom resource
+    plural: xclusters  # Plural name of the custom resource
+  claimNames:
+    kind: EKSClaim  # Kind of the claim
+    plural: eksclaims  # Plural name of the claim
+  versions:
+  - name: v1alpha1  # available versions: v1alpha1, v1beta1, v1
+    served: true  # Indicates if this version is served by the API server
+    referenceable: true  # Indicates if this version can be referenced
+    schema:
+      openAPIV3Schema:
+        type: object  # Type of the schema
+        properties:
+          spec:
+            type: object  # Type of the spec
+            properties:
+              name:
+                type: string  # Type of the name property
+                description: Name of the EKS Cluster. This is also used as prefix for all other resources  # Description of the name property
+              region:
+                type: string  # Type of the region property
+                description: Region in which the VPC will be created.  # Description of the region property
+              subnetSelector:
+                type: object  # Type of the subnetLabel property
+                description: "Label to select the subnets for the EKS Cluster. vpcname: public/private"  # Description of the subnetLabel property
+                additionalProperties:
+                  type: string
+              version:
+                type: string  # Type of the version property
+                description: Version of the EKS Cluster  # Description of the version property
+              nodegroups:
+                type: array  # Type of the nodegroups property
+                description: Nodegroups to be created in the EKS Cluster  # Description of the nodegroups property
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the nodegroup  # Description of the name property
+                    instanceType:
+                      type: string
+                      description: Instance type for the nodegroup  # Description of the instanceType property
+                    minSize:
+                      type: integer
+                      description: Minimum size of the nodegroup  # Description of the minSize property
+                    maxSize:
+                      type: integer
+                      description: Maximum size of the nodegroup  # Description of the maxSize property
+                    desiredSize:
+                      type: integer
+                      description: Desired size of the nodegroup  # Description of the desiredSize property
+                    diskSize:
+                      type: integer
+                      description: Disk size of the nodegroup  # Description of the diskSize property
+                    labels:
+                      type: object
+                      description: Labels to apply to the nodegroup  # Description of the labels property
+                      additionalProperties:
+                        type: string
+                  required:
+                  - name  # Indicates that name is a required property
+              managedAddons:
+                type: array  # Type of the managedAddons property
+                description: Managed addons to be installed on the EKS Cluster  # Description of the managedAddons property
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the managed addon  # Description of the name property
+                    version:
+                      type: string
+                      description: Version of the managed addon  # Description of the version property
+                    configurationValues:
+                      type: string
+                      description: Configuration values for the managed addon in json format  # Description of the configurationValues property
+              accessEntries:
+                type: array  # Type of the accessEntries property
+                description: Access entries to be added to the EKS Cluster  # Description of the accessEntries property
+                items:
+                  type: object
+                  properties:
+                    principalArn:
+                      type: string
+                      description: ARN of the principal  # Description of the principalArn property
+                    policyArn:
+                      type: string
+                      description: ARN of the policy  # Description of the policyArn property
+                  required:
+                  - principalArn  # Indicates that principalArn is a required property
+                  - policyArn  # Indicates that policyArn is a required property
+              tags:
+                type: object  # Type of the tags property
+                description: Tags to apply to the VPC.  # Description of the tags property
+                additionalProperties:
+                  type: string
+            required:
+            - name  # Indicates that name is a required property
+            - region  # Indicates that region is a required property
+            - subnetSelector  # Indicates that subnetSelector is a required property
+            - tags  # Indicates that tags is a required property

@@ -1,0 +1,77 @@
+# CompositeResourceDefinition: Defines a new custom resource type.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xvpcs.aws.cloud.iac  # Name of the custom resource definition
+spec:
+  group: aws.cloud.iac  # API group for the custom resource
+  names:
+    kind: XVPC  # Kind of the custom resource
+    plural: xvpcs  # Plural name of the custom resource
+  claimNames:
+    kind: VPCClaim  # Kind of the claim
+    plural: vpcclaims  # Plural name of the claim
+  versions:
+  - name: v1alpha1  # available versions: v1alpha1, v1beta1, v1
+    served: true  # Indicates if this version is served by the API server
+    referenceable: true  # Indicates if this version can be referenced
+    schema:
+      openAPIV3Schema:
+        type: object  # Type of the schema
+        properties:
+          spec:
+            type: object  # Type of the spec
+            properties:
+              name:
+                type: string  # Type of the name property
+                description: Name of the VPC. This is also used as prefix for all other resources  # Description of the name property
+              region:
+                type: string  # Type of the region property
+                description: Region in which the VPC will be created.  # Description of the region property
+              cidrBlock:
+                type: string  # Type of the cidrBlock property
+                description: CIDR block for the VPC.  # Description of the cidrBlock property
+              publicSubnetCidrs:
+                type: array  # Type of the publicSubnetCidrs property
+                description: CIDR blocks for the public subnets.  # Description of the publicSubnetCidrs property
+                items:
+                  type: string
+              privateSubnetCidrs:
+                type: array  # Type of the privateSubnetCidrs property
+                description: CIDR blocks for the private subnets.  # Description of the privateSubnetCidrs property
+                items:
+                  type: string
+              natType:
+                type: string  # Type of the natType property
+                description: "Type of NAT to be created. allowed values: gateway, instance"  # Description of the natType property
+                default: gateway  # Default value for the natType property
+              # subnets:
+              #   type: array  # Type of the subnets property
+              #   description: Subnets to be created in the VPC  # Description of the subnets property
+              #   items:
+              #     type: object
+              #     properties:
+              #       cidrBlock:
+              #         type: string
+              #         description: CIDR block for the subnet  # Description of the cidrBlock property
+              #       type:
+              #         type: string
+              #         description: Type of the subnet  # Description of the type property
+              #       availabilityZone:
+              #         type: string
+              #         description: Availability zone for the subnet  # Description of the availabilityZone property
+              tags:
+                type: object  # Type of the tags property
+                description: Tags to apply to the VPC and its resources  # Description of the tags property
+                additionalProperties:
+                  type: string
+            required:
+            - name  # Indicates that name is a required property
+            - region  # Indicates that region is a required property
+            - cidrBlock  # Indicates that cidrBlock is a required property
+            - tags  # Indicates that tags is a required property
+          status:
+            properties:
+              atFunction:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true

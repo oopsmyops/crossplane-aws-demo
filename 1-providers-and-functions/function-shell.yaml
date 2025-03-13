@@ -1,0 +1,36 @@
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: function-shell-drc
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      replicas: 1
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              volumeMounts:
+              - name: aws-credentials
+                mountPath: /.aws/  # or /home/<your_user>/.aws, depending on user in container
+                readOnly: true # Credentials shouldn't be written to from the container
+          volumes:
+            - name: aws-credentials
+              secret:
+                secretName: aws-secret # Name of the secret you created
+                items:
+                - key: creds
+                  path: credentials  # This creates /root/.aws/credentials file
+---
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-shell
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-shell:v0.3.0
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: function-shell-drc

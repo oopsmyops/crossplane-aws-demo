@@ -1,0 +1,371 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  labels:
+    provider: aws
+  name: xvpcs.aws.cloud.iac
+spec:
+  compositeTypeRef:
+    apiVersion: aws.cloud.iac/v1alpha1
+    kind: XVPC
+  mode: Pipeline
+  pipeline:
+    - step: create-vpc
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: VPC
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}"
+            spec:
+              forProvider:
+                region: {{ .observed.composite.resource.spec.region }}
+                cidrBlock: {{ .observed.composite.resource.spec.cidrBlock }}
+                tags: 
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  Name : {{ $.observed.composite.resource.spec.name }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                enableDnsSupport: true
+                enableDnsHostnames: true
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+    - step: create-subnets
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{/* Combine Public and Private Subnet CIDRs */}}
+            {{ $subnets := list }}
+            {{ range $i, $cidr := .observed.composite.resource.spec.publicSubnetCidrs }}
+              {{ $subnets = append $subnets (dict "cidr" $cidr "type" "public" "index" $i) }}
+            {{ end }}
+            {{ range $i, $cidr := .observed.composite.resource.spec.privateSubnetCidrs }}
+              {{ $subnets = append $subnets (dict "cidr" $cidr "type" "private" "index" $i) }}
+            {{ end }}
+
+            {{/* Create Subnets */}}
+            {{ range $subnet := $subnets }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Subnet
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.type }}-subnet-{{ add $subnet.index 1 }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ $subnet.type }}-subnet-{{ add $subnet.index 1 }}"
+              labels:
+                {{ $.observed.composite.resource.spec.name }}: "{{ $subnet.type }}"
+            spec:
+              forProvider:
+                region: {{ $.observed.composite.resource.spec.region }}
+                availabilityZone: {{ printf "%s%c" $.observed.composite.resource.spec.region (add $subnet.index 97) }} # Auto-generate AZ based on subnet index
+                vpcIdSelector:
+                  matchControllerRef: true
+                cidrBlock: {{ $subnet.cidr }}
+                tags:
+                {{ range $key, $value := $.observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.type }}-subnet-{{ add $subnet.index 1 }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{ end }}
+
+    - step: get-ami-id
+      functionRef:
+        name: function-shell
+      input:
+        apiVersion: shell.fn.crossplane.io/v1alpha1
+        kind: Parameters
+        shellEnvVars:
+          - key: AWS_DEFAULT_REGION
+            valueRef: spec.region
+          - key: name
+            # valueRef: spec.name
+            value: "fck-nat-al2023-*"
+          - key: owner
+            # valueRef: spec.owner
+            value: "568608671756"
+        shellCommand: |
+          nat_ami_id=$(aws ec2 describe-images --region ${AWS_DEFAULT_REGION} --owners $owner --filters "Name=name,Values=${name}" "Name=architecture,Values=arm64" --query 'Images | sort_by(@, &CreationDate) | [-1].[ImageId]' --output text)
+          # my_pub_ip=$(curl -sL checkip.amazonaws.com)
+          echo "$nat_ami_id"
+        stdoutField: status.atFunction.shell.stdout
+        stderrField: status.atFunction.shell.stderr
+
+    - step: create-gateways
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: InternetGateway
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-igw
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-igw"
+            spec:
+              forProvider:
+                region: {{ .observed.composite.resource.spec.region }}
+                vpcIdSelector:
+                  matchControllerRef: true
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-igw
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{ if eq .observed.composite.resource.spec.natType "gateway" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: EIP
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-eip
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-eip"
+            spec:
+              forProvider:
+                region: {{ .observed.composite.resource.spec.region }}
+                vpc: true
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-eip
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: NATGateway
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-natgw
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-natgw"
+            spec:
+              forProvider:
+                region: {{ .observed.composite.resource.spec.region }}
+                allocationIdSelector:
+                  matchControllerRef: true
+                subnetIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-public-subnet-1
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-natgw
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{ else if eq .observed.composite.resource.spec.natType "instance" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: SecurityGroup
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nat-sg
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nat-sg"
+            spec:
+              forProvider:
+                description: Allow NAT Gateway traffic
+                name: {{ .observed.composite.resource.spec.name }}-nat-sg
+                region: {{ .observed.composite.resource.spec.region }}
+                vpcIdSelector:
+                  matchControllerRef: true
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-nat-sg
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: SecurityGroupRule
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nat-sg-ingress-rule
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nat-sg-ingress-rule"
+            spec:
+              forProvider:
+                cidrBlocksSelector:
+                  matchControllerRef: true
+                fromPort: 0
+                protocol: "-1"
+                region: {{ .observed.composite.resource.spec.region }}
+                securityGroupIdSelector:
+                  matchControllerRef: true
+                toPort: 0
+                type: ingress
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: SecurityGroupRule
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nat-sg-egress-rule
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nat-sg-egress-rule"
+            spec:
+              forProvider:
+                cidrBlocks:
+                  - 0.0.0.0/0
+                fromPort: 0
+                protocol: "-1"
+                region: {{ .observed.composite.resource.spec.region }}
+                securityGroupIdSelector:
+                  matchControllerRef: true
+                toPort: 0
+                type: egress
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Instance
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nat-instance
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nat-instance"
+            spec:
+              forProvider:
+                {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
+                ami: {{ .observed.composite.resource.status.atFunction.shell.stdout}}
+                {{ end }}
+                associatePublicIpAddress: true
+                instanceType: t4g.nano
+                sourceDestCheck: false
+                rootBlockDevice:
+                  - volumeSize: 8
+                    volumeType: gp3
+                    encrypted: true
+                subnetIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-public-subnet-1
+                vpcSecurityGroupIdSelector:
+                  matchControllerRef: true
+                region: {{ .observed.composite.resource.spec.region }}
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-nat-instance
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{ end }}
+  
+    - step: create-route-tables
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{ range $index, $rt := list "public-rt" "private-rt" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: RouteTable
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ $rt }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ $rt }}"
+            spec:
+              forProvider:
+                region: {{ $.observed.composite.resource.spec.region }}
+                vpcIdSelector:
+                  matchControllerRef: true
+                tags:
+                {{ range $key, $value := $.observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ $.observed.composite.resource.spec.name }}-{{ $rt }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            {{ end }}
+
+            {{/* Combine Subnet CIDRs and Route Table Types */}}
+            {{ $subnets := list }}
+            {{ range $i, $cidr := .observed.composite.resource.spec.publicSubnetCidrs }}
+              {{ $subnets = append $subnets (dict "subnetType" "public" "index" $i) }}
+            {{ end }}
+            {{ range $i, $cidr := .observed.composite.resource.spec.privateSubnetCidrs }}
+              {{ $subnets = append $subnets (dict "subnetType" "private" "index" $i) }}
+            {{ end }}
+
+            {{/* Create Route Table Associations */}}
+            {{ range $subnet := $subnets }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: RouteTableAssociation
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.subnetType }}-rta-{{ add $subnet.index 1 }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ $subnet.subnetType }}-rta-{{ add $subnet.index 1 }}"
+            spec:
+              forProvider:
+                region: {{ $.observed.composite.resource.spec.region }}
+                routeTableIdRef:
+                  name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.subnetType }}-rt
+                subnetIdRef:
+                  name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.subnetType }}-subnet-{{ add $subnet.index 1 }}
+            {{ end }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Route
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-public-route
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-public-route"
+            spec:
+              forProvider:
+                destinationCidrBlock: 0.0.0.0/0
+                gatewayIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-igw
+                region: {{ .observed.composite.resource.spec.region }}
+                routeTableIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-public-rt
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Route
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-private-route
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-private-route"
+            spec:
+              forProvider:
+                destinationCidrBlock: 0.0.0.0/0
+                {{ if eq .observed.composite.resource.spec.natType "gateway" }}
+                natGatewayIdRef:
+                  name: {{ $.observed.composite.resource.spec.name }}-natgw
+                {{ else if eq .observed.composite.resource.spec.natType "instance" }}
+                {{ else if and (eq .observed.composite.resource.spec.natType "instance") (ne $.observed.resources nil) }}
+                {{ $natInstanceName := printf "%s-nat-instance" $.observed.composite.resource.spec.name }}
+                networkInterfaceId: {{ ( index $.observed.resources "crossplane-vpc-nat-instance" ).resource.status.atProvider.primaryNetworkInterfaceId }}
+                {{ end }}
+                region: {{ .observed.composite.resource.spec.region }}
+                routeTableIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-private-rt
+  
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: function-auto-ready
