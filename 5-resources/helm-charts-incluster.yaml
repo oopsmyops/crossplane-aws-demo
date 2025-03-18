@@ -1,0 +1,13 @@
+apiVersion: helm.crossplane.io/v1beta1
+kind: Release
+metadata:
+  name: komoplane
+spec:
+  forProvider:
+    chart:
+      name: komoplane
+      repository: https://helm-charts.komodor.io
+      version: 0.1.6
+    namespace: crossplane-system
+  providerConfigRef:
+    name: helm-incluster
