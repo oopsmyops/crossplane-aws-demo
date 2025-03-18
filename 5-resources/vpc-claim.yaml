@@ -8,33 +8,33 @@ metadata:
 spec:
   name: crossplane-vpc  # ID of the VPC
   region: us-east-1  # Region value to be used by the Composition
-  cidrBlock: 110.0.0.0/16  # CIDR block to be used by the Composition
+  cidrBlock: 110.1.0.0/16  # CIDR block to be used by the Composition
   publicSubnetCidrs:
-    - 110.0.1.0/24
-    - 110.0.2.0/24
-    - 110.0.3.0/24
+    - 110.1.1.0/24
+    - 110.1.2.0/24
+    - 110.1.3.0/24
   privateSubnetCidrs:
-    - 110.0.4.0/24
-    - 110.0.5.0/24
-    - 110.0.6.0/24
+    - 110.1.4.0/24
+    - 110.1.5.0/24
+    - 110.1.6.0/24
   natType: gateway  # Type of NAT to be created. allowed values: gateway, instance
   # subnets:
-  #   - cidrBlock: 110.0.1.0/24
+  #   - cidrBlock: 110.1.1.0/24
   #     type: public
   #     availabilityZone: us-east-1a
-  #   - cidrBlock: 110.0.2.0/24
+  #   - cidrBlock: 110.1.2.0/24
   #     type: public
   #     availabilityZone: us-east-1b
-  #   - cidrBlock: 110.0.3.0/24
+  #   - cidrBlock: 110.1.3.0/24
   #     type: public
   #     availabilityZone: us-east-1c
-  #   - cidrBlock: 110.0.4.0/24
+  #   - cidrBlock: 110.1.4.0/24
   #     type: private
   #     availabilityZone: us-east-1a
-  #   - cidrBlock: 110.0.5.0/24
+  #   - cidrBlock: 110.1.5.0/24
   #     type: private
   #     availabilityZone: us-east-1b
-  #   - cidrBlock: 110.0.6.0/24
+  #   - cidrBlock: 110.1.6.0/24
   #     type: private
   #     availabilityZone: us-east-1c
   tags:  # Tags to be applied to the VPC and other resources
