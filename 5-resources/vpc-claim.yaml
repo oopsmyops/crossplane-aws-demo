@@ -17,7 +17,7 @@ spec:
     - 110.1.4.0/24
     - 110.1.5.0/24
     - 110.1.6.0/24
-  natType: gateway  # Type of NAT to be created. allowed values: gateway, instance
+  natType: instance  # Type of NAT to be created. allowed values: gateway, instance
   # subnets:
   #   - cidrBlock: 110.1.1.0/24
   #     type: public

@@ -354,13 +354,15 @@ spec:
             spec:
               forProvider:
                 destinationCidrBlock: 0.0.0.0/0
+                {{ $natInstanceName := printf "%s-nat-instance" .observed.composite.resource.spec.name }}
                 {{ if eq .observed.composite.resource.spec.natType "gateway" }}
                 natGatewayIdRef:
                   name: {{ $.observed.composite.resource.spec.name }}-natgw
-                {{ else if eq .observed.composite.resource.spec.natType "instance" }}
-                {{ else if and (eq .observed.composite.resource.spec.natType "instance") (ne $.observed.resources nil) }}
-                {{ $natInstanceName := printf "%s-nat-instance" $.observed.composite.resource.spec.name }}
-                networkInterfaceId: {{ ( index $.observed.resources "crossplane-vpc-nat-instance" ).resource.status.atProvider.primaryNetworkInterfaceId }}
+                {{ else if and ( eq .observed.composite.resource.spec.natType "instance" ) ( ne .observed.resources nil ) }}
+                {{ $natCondition := ( index $.observed.resources $natInstanceName ) | getResourceCondition "Ready" }}
+                {{ if eq $natCondition.Status "True" }}
+                networkInterfaceId: {{ ( index $.observed.resources $natInstanceName ).resource.status.atProvider.primaryNetworkInterfaceId }}
+                {{ end }}
                 {{ end }}
                 region: {{ .observed.composite.resource.spec.region }}
                 routeTableIdRef:
