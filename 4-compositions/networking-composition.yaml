@@ -106,7 +106,8 @@ spec:
           k3s_vpc_id=$(aws ec2 describe-vpcs --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc" --query 'Vpcs[0].VpcId' --output text)
           k3s_vpc_cidr=$(aws ec2 describe-vpcs --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc" --query 'Vpcs[0].CidrBlock' --output text)
           private_route_table_id=$(aws ec2 describe-route-tables --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc-private" --query 'RouteTables[0].RouteTableId' --output text)
-          echo "{\"nat_ami_id\": \"$nat_ami_id\", \"k3s_vpc_id\": \"$k3s_vpc_id\", \"private_route_table_id\": \"$private_route_table_id\", \"k3s_vpc_cidr\": \"$k3s_vpc_cidr\"}"
+          # echo "{\"nat_ami_id\": \"$nat_ami_id\", \"k3s_vpc_id\": \"$k3s_vpc_id\", \"private_route_table_id\": \"$private_route_table_id\", \"k3s_vpc_cidr\": \"$k3s_vpc_cidr\"}"
+          echo "$nat_ami_id,$k3s_vpc_id,$k3s_vpc_cidr,$private_route_table_id"
         stdoutField: status.atFunction.shell.stdout
         stderrField: status.atFunction.shell.stderr
 
@@ -250,7 +251,7 @@ spec:
             spec:
               forProvider:
                 {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
-                ami: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "nat_ami_id" }}
+                ami: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 0) }}
                 {{ end }}
                 associatePublicIpAddress: true
                 instanceType: t4g.nano
@@ -370,8 +371,6 @@ spec:
                 region: {{ .observed.composite.resource.spec.region }}
                 routeTableIdRef:
                   name: {{ .observed.composite.resource.spec.name }}-private-rt
-
-
     - step: create-peering-connection
       functionRef:
         name: function-go-templating
@@ -392,7 +391,7 @@ spec:
               forProvider:
                 autoAccept: true
                 {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
-                peerVpcId: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "k3s_vpc_id" }}
+                peerVpcId: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 1) }}
                 {{ end }}
                 region: {{ .observed.composite.resource.spec.region }}
                 vpcIdSelector:
@@ -415,10 +414,11 @@ spec:
             spec:
               forProvider:
                 {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
-                destinationCidrBlock: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "k3s_vpc_cidr" }}
+                destinationCidrBlock: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 2) }}
                 {{ end }}
                 vpcPeeringConnectionIdSelector:
                   matchControllerRef: true
+                region: {{ .observed.composite.resource.spec.region }}
                 routeTableIdRef:
                   name: {{ .observed.composite.resource.spec.name }}-private-rt
             ---
@@ -431,11 +431,11 @@ spec:
             spec:
               forProvider:
                 destinationCidrBlock: {{ .observed.composite.resource.spec.cidrBlock }}
-                {{ end }}
                 vpcPeeringConnectionIdSelector:
                   matchControllerRef: true
+                region: {{ .observed.composite.resource.spec.region }}
                 {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
-                routeTableId: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "private_route_table_id" }}
+                routeTableId: {{ (index (splitList "," $.observed.composite.resource.status.atFunction.shell.stdout) 3) }}
                 {{ end }}
 
     - step: automatically-detect-ready-composed-resources
