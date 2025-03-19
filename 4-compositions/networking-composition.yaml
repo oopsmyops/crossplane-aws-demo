@@ -103,7 +103,10 @@ spec:
         shellCommand: |
           nat_ami_id=$(aws ec2 describe-images --region ${AWS_DEFAULT_REGION} --owners $owner --filters "Name=name,Values=${name}" "Name=architecture,Values=arm64" --query 'Images | sort_by(@, &CreationDate) | [-1].[ImageId]' --output text)
           # my_pub_ip=$(curl -sL checkip.amazonaws.com)
-          echo "$nat_ami_id"
+          k3s_vpc_id=$(aws ec2 describe-vpcs --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc" --query 'Vpcs[0].VpcId' --output text)
+          k3s_vpc_cidr=$(aws ec2 describe-vpcs --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc" --query 'Vpcs[0].CidrBlock' --output text)
+          private_route_table_id=$(aws ec2 describe-route-tables --region ${AWS_DEFAULT_REGION} --filters "Name=tag:Name,Values=k3s-vpc-private" --query 'RouteTables[0].RouteTableId' --output text)
+          echo "{\"nat_ami_id\": \"$nat_ami_id\", \"k3s_vpc_id\": \"$k3s_vpc_id\", \"private_route_table_id\": \"$private_route_table_id\", \"k3s_vpc_cidr\": \"$k3s_vpc_cidr\"}"
         stdoutField: status.atFunction.shell.stdout
         stderrField: status.atFunction.shell.stderr
 
@@ -247,7 +250,7 @@ spec:
             spec:
               forProvider:
                 {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
-                ami: {{ .observed.composite.resource.status.atFunction.shell.stdout}}
+                ami: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "nat_ami_id" }}
                 {{ end }}
                 associatePublicIpAddress: true
                 instanceType: t4g.nano
@@ -367,7 +370,74 @@ spec:
                 region: {{ .observed.composite.resource.spec.region }}
                 routeTableIdRef:
                   name: {{ .observed.composite.resource.spec.name }}-private-rt
-  
+
+
+    - step: create-peering-connection
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta2
+            kind: VPCPeeringConnection
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-pc
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-pc"
+            spec:
+              forProvider:
+                autoAccept: true
+                {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
+                peerVpcId: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "k3s_vpc_id" }}
+                {{ end }}
+                region: {{ .observed.composite.resource.spec.region }}
+                vpcIdSelector:
+                  matchControllerRef: true
+                tags:
+                {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+                  Name: {{ .observed.composite.resource.spec.name }}-pc
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Route
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-pc-route1
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-pc-route1"
+            spec:
+              forProvider:
+                {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
+                destinationCidrBlock: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "k3s_vpc_cidr" }}
+                {{ end }}
+                vpcPeeringConnectionIdSelector:
+                  matchControllerRef: true
+                routeTableIdRef:
+                  name: {{ .observed.composite.resource.spec.name }}-private-rt
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta1
+            kind: Route
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-pc-route2
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-pc-route2"
+            spec:
+              forProvider:
+                destinationCidrBlock: {{ .observed.composite.resource.spec.cidrBlock }}
+                {{ end }}
+                vpcPeeringConnectionIdSelector:
+                  matchControllerRef: true
+                {{ if .observed.composite.resource.status.atFunction.shell.stdout }}
+                routeTableId: {{ .observed.composite.resource.status.atFunction.shell.stdout | fromJson | index "private_route_table_id" }}
+                {{ end }}
+
     - step: automatically-detect-ready-composed-resources
       functionRef:
         name: function-auto-ready

@@ -21,7 +21,7 @@ spec:
       labels:
         nodegroup: nodegroup-1
   accessEntries:
-    - principalArn: "arn:aws:iam::<ACCOUNT_ID>:user/user2"
+    - principalArn: "arn:aws:iam::<ACCOUNT_ID>:user/oopsmyops"
       policyArn: "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   managedAddons:
     - name: vpc-cni
