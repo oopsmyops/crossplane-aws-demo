@@ -358,6 +358,9 @@ spec:
                 values:
                   clusterName: {{ $.observed.composite.resource.spec.name }}
                   region: {{ $.observed.composite.resource.spec.region }}
+                  {{ range $key, $value := $.observed.composite.resource.spec.subnetSelector }}
+                  vpcID: {{ ( index $.observed.resources $key ).resource.status.atProvider.id }}
+                  {{ end }}
                   {{- if .values }}
                   {{ .values }}
                   {{- end }}
