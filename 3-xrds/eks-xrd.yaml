@@ -67,21 +67,6 @@ spec:
                         type: string
                   required:
                   - name  # Indicates that name is a required property
-              managedAddons:
-                type: array  # Type of the managedAddons property
-                description: Managed addons to be installed on the EKS Cluster  # Description of the managedAddons property
-                items:
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                      description: Name of the managed addon  # Description of the name property
-                    version:
-                      type: string
-                      description: Version of the managed addon  # Description of the version property
-                    configurationValues:
-                      type: string
-                      description: Configuration values for the managed addon in json format  # Description of the configurationValues property
               accessEntries:
                 type: array  # Type of the accessEntries property
                 description: Access entries to be added to the EKS Cluster  # Description of the accessEntries property
@@ -97,6 +82,36 @@ spec:
                   required:
                   - principalArn  # Indicates that principalArn is a required property
                   - policyArn  # Indicates that policyArn is a required property
+              managedAddons:
+                type: array  # Type of the managedAddons property
+                description: Managed addons to be installed on the EKS Cluster  # Description of the managedAddons property
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the managed addon  # Description of the name property
+                    version:
+                      type: string
+                      description: Version of the managed addon  # Description of the version property
+                    configurationValues:
+                      type: string
+                      description: Configuration values for the managed addon in json format  # Description of the configurationValues property
+              externalAddons:
+                type: array  # Type of the externalAddons property
+                description: External addons to be installed on the EKS Cluster  # Description of the externalAddons property
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the external addon  # Description of the name property
+                    version:
+                      type: string
+                      description: Version of the external addon  # Description of the version property
+                    values:
+                      type: string
+                      description: Values for the external addon in yaml format  # Description of the values property
               tags:
                 type: object  # Type of the tags property
                 description: Tags to apply to the VPC.  # Description of the tags property
