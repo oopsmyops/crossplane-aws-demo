@@ -110,8 +110,10 @@ spec:
                       type: string
                       description: Version of the external addon  # Description of the version property
                     values:
-                      type: string
+                      type: object
                       description: Values for the external addon in yaml format  # Description of the values property
+                      additionalProperties:
+                        type: string
               tags:
                 type: object  # Type of the tags property
                 description: Tags to apply to the VPC.  # Description of the tags property
