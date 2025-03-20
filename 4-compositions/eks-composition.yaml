@@ -294,7 +294,73 @@ spec:
                 tags:
                   creation_date: {{ now.Format "02-01-06" }}
             {{- end }}
-  
+
+    - step: create-external-addons
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta1
+            kind: ClusterAuth
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-cluster-auth
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-cluster-auth"
+            spec:
+              forProvider:
+                clusterNameSelector:
+                  matchControllerRef: true
+                region: {{ .observed.composite.resource.spec.region }}
+              writeConnectionSecretToRef:
+                name: {{ .observed.composite.resource.spec.name }}-kubeconfig
+                namespace: crossplane-system
+            # ---
+            # apiVersion: pkg.crossplane.io/v1
+            # kind: Provider
+            # metadata:
+            #   name: provider-helm
+            #   annotations:
+            #     gotemplating.fn.crossplane.io/composition-resource-name: provider-helm
+            #     gotemplating.fn.crossplane.io/ready: "True"
+            # spec:
+            #   package: xpkg.upbound.io/upbound/provider-helm:v0.20.4
+            ---
+            apiVersion: helm.crossplane.io/v1beta1
+            kind: ProviderConfig
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-helm-provider
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-helm-provider"
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              credentials:
+                secretRef:
+                  key: kubeconfig
+                  name: {{ .observed.composite.resource.spec.name }}-kubeconfig
+                  namespace: crossplane-system
+                source: Secret
+            ---
+            apiVersion: helm.crossplane.io/v1beta1
+            kind: Release
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-komoplane
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-komoplane"
+            spec:
+              forProvider:
+                chart:
+                  name: komoplane
+                  repository: https://helm-charts.komodor.io
+                  version: 0.1.6
+                namespace: crossplane-system
+              providerConfigRef:
+                name: {{ .observed.composite.resource.spec.name }}-helm-provider
+
     - step: automatically-detect-ready-composed-resources
       functionRef:
         name: function-auto-ready
