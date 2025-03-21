@@ -139,10 +139,6 @@ spec:
                   - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
                   - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
                   - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
-                inlinePolicy:
-                  - name: AWSLoadBalancerControllerIAMPolicy
-                    policy: |
-                      {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:CreateServiceLinkedRole"],"Resource":"*","Condition":{"StringEquals":{"iam:AWSServiceName":"elasticloadbalancing.amazonaws.com"}}},{"Effect":"Allow","Action":["ec2:DescribeAccountAttributes","ec2:DescribeAddresses","ec2:DescribeAvailabilityZones","ec2:DescribeInternetGateways","ec2:DescribeVpcs","ec2:DescribeVpcPeeringConnections","ec2:DescribeSubnets","ec2:DescribeSecurityGroups","ec2:DescribeInstances","ec2:DescribeNetworkInterfaces","ec2:DescribeTags","ec2:GetCoipPoolUsage","ec2:DescribeCoipPools","ec2:GetSecurityGroupsForVpc","ec2:DescribeIpamPools","elasticloadbalancing:DescribeLoadBalancers","elasticloadbalancing:DescribeLoadBalancerAttributes","elasticloadbalancing:DescribeListeners","elasticloadbalancing:DescribeListenerCertificates","elasticloadbalancing:DescribeSSLPolicies","elasticloadbalancing:DescribeRules","elasticloadbalancing:DescribeTargetGroups","elasticloadbalancing:DescribeTargetGroupAttributes","elasticloadbalancing:DescribeTargetHealth","elasticloadbalancing:DescribeTags","elasticloadbalancing:DescribeTrustStores","elasticloadbalancing:DescribeListenerAttributes","elasticloadbalancing:DescribeCapacityReservation"],"Resource":"*"},{"Effect":"Allow","Action":["cognito-idp:DescribeUserPoolClient","acm:ListCertificates","acm:DescribeCertificate","iam:ListServerCertificates","iam:GetServerCertificate","waf-regional:GetWebACL","waf-regional:GetWebACLForResource","waf-regional:AssociateWebACL","waf-regional:DisassociateWebACL","wafv2:GetWebACL","wafv2:GetWebACLForResource","wafv2:AssociateWebACL","wafv2:DisassociateWebACL","shield:GetSubscriptionState","shield:DescribeProtection","shield:CreateProtection","shield:DeleteProtection"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:AuthorizeSecurityGroupIngress","ec2:RevokeSecurityGroupIngress"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:CreateSecurityGroup"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:CreateTags"],"Resource":"arn:aws:ec2:*:*:security-group/*","Condition":{"StringEquals":{"ec2:CreateAction":"CreateSecurityGroup"},"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["ec2:CreateTags","ec2:DeleteTags"],"Resource":"arn:aws:ec2:*:*:security-group/*","Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"true","aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["ec2:AuthorizeSecurityGroupIngress","ec2:RevokeSecurityGroupIngress","ec2:DeleteSecurityGroup"],"Resource":"*","Condition":{"Null":{"aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:CreateLoadBalancer","elasticloadbalancing:CreateTargetGroup"],"Resource":"*","Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:CreateListener","elasticloadbalancing:DeleteListener","elasticloadbalancing:CreateRule","elasticloadbalancing:DeleteRule"],"Resource":"*"},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags","elasticloadbalancing:RemoveTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"],"Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"true","aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags","elasticloadbalancing:RemoveTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*","arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*","arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*","arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"]},{"Effect":"Allow","Action":["elasticloadbalancing:ModifyLoadBalancerAttributes","elasticloadbalancing:SetIpAddressType","elasticloadbalancing:SetSecurityGroups","elasticloadbalancing:SetSubnets","elasticloadbalancing:DeleteLoadBalancer","elasticloadbalancing:ModifyTargetGroup","elasticloadbalancing:ModifyTargetGroupAttributes","elasticloadbalancing:DeleteTargetGroup","elasticloadbalancing:ModifyListenerAttributes","elasticloadbalancing:ModifyCapacityReservation","elasticloadbalancing:ModifyIpPools"],"Resource":"*","Condition":{"Null":{"aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"],"Condition":{"StringEquals":{"elasticloadbalancing:CreateAction":["CreateTargetGroup","CreateLoadBalancer"]},"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:RegisterTargets","elasticloadbalancing:DeregisterTargets"],"Resource":"arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"},{"Effect":"Allow","Action":["elasticloadbalancing:SetWebAcl","elasticloadbalancing:ModifyListener","elasticloadbalancing:AddListenerCertificates","elasticloadbalancing:RemoveListenerCertificates","elasticloadbalancing:ModifyRule","elasticloadbalancing:SetRulePriorities"],"Resource":"*"}]}
                 assumeRolePolicy: |
                   {
                     "Version": "2012-10-17",
@@ -323,26 +319,99 @@ spec:
               writeConnectionSecretToRef:
                 name: {{ .observed.composite.resource.spec.name }}-kubeconfig
                 namespace: crossplane-system
-            {{ range list "helm" "kubernetes"}}
             ---
-            apiVersion: {{ . }}.crossplane.io/v1beta1
+            apiVersion: helm.crossplane.io/v1beta1
             kind: ProviderConfig
             metadata:
-              name: {{ $.observed.composite.resource.spec.name }}-{{ . }}-provider
+              name: {{ .observed.composite.resource.spec.name }}-helm-provider
               annotations:
-                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ . }}-provider"
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-helm-provider"
                 gotemplating.fn.crossplane.io/ready: "True"
             spec:
               credentials:
                 secretRef:
                   key: kubeconfig
-                  name: {{ $.observed.composite.resource.spec.name }}-kubeconfig
+                  name: {{ .observed.composite.resource.spec.name }}-kubeconfig
                   namespace: crossplane-system
                 source: Secret
-            {{- end }}
-
-            {{- range .observed.composite.resource.spec.externalAddons }}
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha1
+            kind: ProviderConfig
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-kubernetes-provider
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-kubernetes-provider"
+                gotemplating.fn.crossplane.io/ready: "True"
+            spec:
+              credentials:
+                secretRef:
+                  key: kubeconfig
+                  name: {{ .observed.composite.resource.spec.name }}-kubeconfig
+                  namespace: crossplane-system
+                source: Secret
+            {{- if ne .observed.resources nil }}
+            {{ $ekscondition := ( index $.observed.resources $.observed.composite.resource.spec.name ) | getResourceCondition "Ready" }}
+            {{- if eq $ekscondition.Status "True" }}
+            {{- range $.observed.composite.resource.spec.externalAddons }}
             {{- if eq .name "aws-load-balancer-controller" }}
+            ---
+            apiVersion: iam.aws.upbound.io/v1beta1
+            kind: Role
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}-role
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}-role"
+              labels:
+                {{ $.observed.composite.resource.spec.name }}: {{ .name }}
+            spec:
+              forProvider:
+                forceDetachPolicies: true
+                inlinePolicy:
+                  - name: AWSLoadBalancerControllerIAMPolicy
+                    policy: |
+                      {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["iam:CreateServiceLinkedRole"],"Resource":"*","Condition":{"StringEquals":{"iam:AWSServiceName":"elasticloadbalancing.amazonaws.com"}}},{"Effect":"Allow","Action":["ec2:DescribeAccountAttributes","ec2:DescribeAddresses","ec2:DescribeAvailabilityZones","ec2:DescribeInternetGateways","ec2:DescribeVpcs","ec2:DescribeVpcPeeringConnections","ec2:DescribeSubnets","ec2:DescribeSecurityGroups","ec2:DescribeInstances","ec2:DescribeNetworkInterfaces","ec2:DescribeTags","ec2:GetCoipPoolUsage","ec2:DescribeCoipPools","ec2:GetSecurityGroupsForVpc","ec2:DescribeIpamPools","elasticloadbalancing:DescribeLoadBalancers","elasticloadbalancing:DescribeLoadBalancerAttributes","elasticloadbalancing:DescribeListeners","elasticloadbalancing:DescribeListenerCertificates","elasticloadbalancing:DescribeSSLPolicies","elasticloadbalancing:DescribeRules","elasticloadbalancing:DescribeTargetGroups","elasticloadbalancing:DescribeTargetGroupAttributes","elasticloadbalancing:DescribeTargetHealth","elasticloadbalancing:DescribeTags","elasticloadbalancing:DescribeTrustStores","elasticloadbalancing:DescribeListenerAttributes","elasticloadbalancing:DescribeCapacityReservation"],"Resource":"*"},{"Effect":"Allow","Action":["cognito-idp:DescribeUserPoolClient","acm:ListCertificates","acm:DescribeCertificate","iam:ListServerCertificates","iam:GetServerCertificate","waf-regional:GetWebACL","waf-regional:GetWebACLForResource","waf-regional:AssociateWebACL","waf-regional:DisassociateWebACL","wafv2:GetWebACL","wafv2:GetWebACLForResource","wafv2:AssociateWebACL","wafv2:DisassociateWebACL","shield:GetSubscriptionState","shield:DescribeProtection","shield:CreateProtection","shield:DeleteProtection"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:AuthorizeSecurityGroupIngress","ec2:RevokeSecurityGroupIngress"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:CreateSecurityGroup"],"Resource":"*"},{"Effect":"Allow","Action":["ec2:CreateTags"],"Resource":"arn:aws:ec2:*:*:security-group/*","Condition":{"StringEquals":{"ec2:CreateAction":"CreateSecurityGroup"},"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["ec2:CreateTags","ec2:DeleteTags"],"Resource":"arn:aws:ec2:*:*:security-group/*","Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"true","aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["ec2:AuthorizeSecurityGroupIngress","ec2:RevokeSecurityGroupIngress","ec2:DeleteSecurityGroup"],"Resource":"*","Condition":{"Null":{"aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:CreateLoadBalancer","elasticloadbalancing:CreateTargetGroup"],"Resource":"*","Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:CreateListener","elasticloadbalancing:DeleteListener","elasticloadbalancing:CreateRule","elasticloadbalancing:DeleteRule"],"Resource":"*"},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags","elasticloadbalancing:RemoveTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"],"Condition":{"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"true","aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags","elasticloadbalancing:RemoveTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*","arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*","arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*","arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*"]},{"Effect":"Allow","Action":["elasticloadbalancing:ModifyLoadBalancerAttributes","elasticloadbalancing:SetIpAddressType","elasticloadbalancing:SetSecurityGroups","elasticloadbalancing:SetSubnets","elasticloadbalancing:DeleteLoadBalancer","elasticloadbalancing:ModifyTargetGroup","elasticloadbalancing:ModifyTargetGroupAttributes","elasticloadbalancing:DeleteTargetGroup","elasticloadbalancing:ModifyListenerAttributes","elasticloadbalancing:ModifyCapacityReservation","elasticloadbalancing:ModifyIpPools"],"Resource":"*","Condition":{"Null":{"aws:ResourceTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:AddTags"],"Resource":["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/net/*/*","arn:aws:elasticloadbalancing:*:*:loadbalancer/app/*/*"],"Condition":{"StringEquals":{"elasticloadbalancing:CreateAction":["CreateTargetGroup","CreateLoadBalancer"]},"Null":{"aws:RequestTag/elbv2.k8s.aws/cluster":"false"}}},{"Effect":"Allow","Action":["elasticloadbalancing:RegisterTargets","elasticloadbalancing:DeregisterTargets"],"Resource":"arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"},{"Effect":"Allow","Action":["elasticloadbalancing:SetWebAcl","elasticloadbalancing:ModifyListener","elasticloadbalancing:AddListenerCertificates","elasticloadbalancing:RemoveListenerCertificates","elasticloadbalancing:ModifyRule","elasticloadbalancing:SetRulePriorities"],"Resource":"*"}]}
+                assumeRolePolicy: |
+                  {
+                      "Version": "2012-10-17",
+                      "Statement": [
+                          {
+                              "Sid": "AllowEksAuthToAssumeRoleForPodIdentity",
+                              "Effect": "Allow",
+                              "Principal": {
+                                  "Service": "pods.eks.amazonaws.com"
+                              },
+                              "Action": [
+                                  "sts:AssumeRole",
+                                  "sts:TagSession"
+                              ]
+                          }
+                      ]
+                  }
+                tags: 
+                {{ range $key, $value := $.observed.composite.resource.spec.tags }}
+                  Name : {{ $.observed.composite.resource.spec.name }}
+                  {{ $key }}: {{ $value }}
+                {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: eks.aws.upbound.io/v1beta1
+            kind: PodIdentityAssociation
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}-pod-identity
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}-pod-identity"
+            spec:
+              forProvider:
+                clusterNameSelector:
+                  matchControllerRef: true
+                namespace: kube-infra
+                region: {{ $.observed.composite.resource.spec.region }}
+                roleArnSelector:
+                  matchLabels:
+                    {{ $.observed.composite.resource.spec.name }}: {{ .name }}
+                serviceAccount: aws-load-balancer-controller
             ---
             apiVersion: helm.crossplane.io/v1beta1
             kind: Release
@@ -361,6 +430,8 @@ spec:
                   clusterName: {{ $.observed.composite.resource.spec.name }}
                   region: {{ $.observed.composite.resource.spec.region }}
                   vpcId: {{ ( index $.observed.resources $.observed.composite.resource.spec.name ).resource.status.atProvider.vpcConfig.clusterSecurityGroupId }}
+                  serviceAccount:
+                    create: true
                   {{ if .values }}
                   {{ .values | toYaml | nindent 6 }}
                   {{ end }}
@@ -370,9 +441,10 @@ spec:
             apiVersion: helm.crossplane.io/v1beta1
             kind: ProviderConfigUsage
             metadata:
-              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}-pcu
               annotations:
-                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}"
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}-pcu"
+                gotemplating.fn.crossplane.io/ready: "True"
             providerConfigRef:
               name: {{ $.observed.composite.resource.spec.name }}-helm-provider
             resourceRef:
@@ -381,7 +453,10 @@ spec:
               name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
             {{- end }}
             {{- end }}
+            {{- end }}
+            {{- end }}
 
     - step: automatically-detect-ready-composed-resources
       functionRef:
         name: function-auto-ready
+

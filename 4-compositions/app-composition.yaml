@@ -66,6 +66,13 @@ spec:
                             image: {{ .observed.composite.resource.spec.image.repository }}:{{ .observed.composite.resource.spec.image.tag }}
                             ports:
                               - containerPort: {{ .observed.composite.resource.spec.service.port }}
+                            resources:
+                              requests:
+                                cpu: 100m
+                                memory: 128Mi
+                              limits:
+                                cpu: 200m
+                                memory: 256Mi
               providerConfigRef:
                 name: {{ .observed.composite.resource.spec.targetCluster }}-kubernetes-provider
             ---
@@ -102,7 +109,7 @@ spec:
             spec:
               forProvider:
                 manifest:
-                  apiVersion: extensions/v1beta1
+                  apiVersion: networking.k8s.io/v1
                   kind: Ingress
                   metadata:
                     name: {{ $.observed.composite.resource.metadata.name }}
@@ -141,7 +148,7 @@ spec:
             spec:
               forProvider:
                 manifest:
-                  apiVersion: autoscaling/v2beta2
+                  apiVersion: autoscaling/v2
                   kind: HorizontalPodAutoscaler
                   metadata:
                     name: {{ $.observed.composite.resource.metadata.name }}
@@ -158,13 +165,17 @@ spec:
                       - type: Resource
                         resource:
                           name: cpu
-                          targetAverageUtilization: {{ $.observed.composite.resource.spec.hpa.targetCPU }}
+                          target:
+                            averageUtilization: {{ $.observed.composite.resource.spec.hpa.targetCPU }}
+                            type: Utilization
                       {{- end }}
                       {{- if $.observed.composite.resource.spec.hpa.targetMemory }}
                       - type: Resource
                         resource:
                           name: memory
-                          targetAverageUtilization: {{ $.observed.composite.resource.spec.hpa.targetMemory }}
+                          target:
+                            averageUtilization: {{ $.observed.composite.resource.spec.hpa.targetMemory }}
+                            type: Utilization
                       {{- end }}
               providerConfigRef:
                 name: {{ $.observed.composite.resource.spec.targetCluster }}-kubernetes-provider
@@ -178,9 +189,10 @@ spec:
             apiVersion: helm.crossplane.io/v1beta1
             kind: ProviderConfigUsage
             metadata:
-              name: {{ $.observed.composite.resource.metadata.name }}-{{ . }}
+              name: {{ $.observed.composite.resource.metadata.name }}-{{ . }}-pcu
               annotations:
-                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.metadata.name }}-{{ . }}"
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.metadata.name }}-{{ . }}-pcu"
+                gotemplating.fn.crossplane.io/ready: "True"
             providerConfigRef:
               name: {{ $.observed.composite.resource.spec.targetCluster }}-kubernetes-provider
             resourceRef:
