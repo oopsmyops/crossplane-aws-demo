@@ -323,21 +323,23 @@ spec:
               writeConnectionSecretToRef:
                 name: {{ .observed.composite.resource.spec.name }}-kubeconfig
                 namespace: crossplane-system
+            {{ range list "helm" "kubernetes"}}
             ---
-            apiVersion: helm.crossplane.io/v1beta1
+            apiVersion: {{ . }}.crossplane.io/v1beta1
             kind: ProviderConfig
             metadata:
-              name: {{ .observed.composite.resource.spec.name }}-helm-provider
+              name: {{ $.observed.composite.resource.spec.name }}-{{ . }}-provider
               annotations:
-                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-helm-provider"
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ . }}-provider"
                 gotemplating.fn.crossplane.io/ready: "True"
             spec:
               credentials:
                 secretRef:
                   key: kubeconfig
-                  name: {{ .observed.composite.resource.spec.name }}-kubeconfig
+                  name: {{ $.observed.composite.resource.spec.name }}-kubeconfig
                   namespace: crossplane-system
                 source: Secret
+            {{- end }}
 
             {{- range .observed.composite.resource.spec.externalAddons }}
             {{- if eq .name "aws-load-balancer-controller" }}
@@ -358,14 +360,25 @@ spec:
                 values:
                   clusterName: {{ $.observed.composite.resource.spec.name }}
                   region: {{ $.observed.composite.resource.spec.region }}
-                  {{ range $key, $value := $.observed.composite.resource.spec.subnetSelector }}
-                  vpcID: {{ ( index $.observed.resources $key ).resource.status.atProvider.id }}
+                  vpcId: {{ ( index $.observed.resources $.observed.composite.resource.spec.name ).resource.status.atProvider.vpcConfig.clusterSecurityGroupId }}
+                  {{ if .values }}
+                  {{ .values | toYaml | nindent 6 }}
                   {{ end }}
-                  {{- if .values }}
-                  {{ .values }}
-                  {{- end }}
               providerConfigRef:
                 name: {{ $.observed.composite.resource.spec.name }}-helm-provider
+            ---
+            apiVersion: helm.crossplane.io/v1beta1
+            kind: ProviderConfigUsage
+            metadata:
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.spec.name }}-{{ .name }}"
+            providerConfigRef:
+              name: {{ $.observed.composite.resource.spec.name }}-helm-provider
+            resourceRef:
+              apiVersion: helm.crossplane.io/v1beta1
+              kind: Release
+              name: {{ $.observed.composite.resource.spec.name }}-{{ .name }}
             {{- end }}
             {{- end }}
 

@@ -112,6 +112,7 @@ spec:
                     values:
                       type: object
                       description: Values for the external addon in yaml format  # Description of the values property
+                      x-kubernetes-preserve-unknown-fields: true
               tags:
                 type: object  # Type of the tags property
                 description: Tags to apply to the VPC.  # Description of the tags property

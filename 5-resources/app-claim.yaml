@@ -1,0 +1,21 @@
+apiVersion: aws.cloud.iac/v1alpha1
+kind: AppClaim
+metadata:
+  name: game-2048
+spec:
+  targetCluster: crossplane-eks-cluster
+  appNamespace: game-2048
+  image:
+    repository: public.ecr.aws/l6m2t8p7/docker-2048
+    tag: latest
+  service:
+    port: 80
+  ingress:
+    enabled: true
+    className: alb
+    host: ""
+  hpa:
+    enabled: true
+    min: 1
+    max: 2
+    targetCPU: 70

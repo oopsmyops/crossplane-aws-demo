@@ -1,0 +1,193 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  labels:
+    provider: aws
+  name: xapps.aws.cloud.iac
+spec:
+  compositeTypeRef:
+    apiVersion: aws.cloud.iac/v1alpha1
+    kind: XApp
+  mode: Pipeline
+  pipeline:
+    - step: go-templating
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ .observed.composite.resource.spec.appNamespace }}-namespace
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.appNamespace }}-namespace"
+            spec:
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: Namespace
+                  metadata:
+                    name: {{ .observed.composite.resource.spec.appNamespace }}
+              providerConfigRef:
+                name: {{ .observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ .observed.composite.resource.metadata.name }}-deployment
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.metadata.name }}-deployment"
+            spec:
+              forProvider:
+                manifest:
+                  apiVersion: apps/v1
+                  kind: Deployment
+                  metadata:
+                    name: {{ .observed.composite.resource.metadata.name }}
+                    namespace: {{ .observed.composite.resource.spec.appNamespace }}
+                    labels:
+                      app: {{ .observed.composite.resource.metadata.name }}
+                  spec:
+                    selector:
+                      matchLabels:
+                        app: {{ .observed.composite.resource.metadata.name }}
+                    template:
+                      metadata:
+                        labels:
+                          app: {{ .observed.composite.resource.metadata.name }}
+                      spec:
+                        containers:
+                          - name: {{ .observed.composite.resource.metadata.name }}
+                            image: {{ .observed.composite.resource.spec.image.repository }}:{{ .observed.composite.resource.spec.image.tag }}
+                            ports:
+                              - containerPort: {{ .observed.composite.resource.spec.service.port }}
+              providerConfigRef:
+                name: {{ .observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ .observed.composite.resource.metadata.name }}-service
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.metadata.name }}-service"
+            spec:
+              forProvider:
+                manifest:
+                  apiVersion: v1
+                  kind: Service
+                  metadata:
+                    name: {{ .observed.composite.resource.metadata.name }}
+                    namespace: {{ .observed.composite.resource.spec.appNamespace }}
+                  spec:
+                    selector:
+                      app: {{ .observed.composite.resource.metadata.name }}
+                    ports:
+                      - port: {{ .observed.composite.resource.spec.service.port }}
+                        targetPort: {{ .observed.composite.resource.spec.service.port }}
+              providerConfigRef:
+                name: {{ .observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            {{- if .observed.composite.resource.spec.ingress.enabled }}
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $.observed.composite.resource.metadata.name }}-ingress
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.metadata.name }}-ingress"
+            spec:
+              forProvider:
+                manifest:
+                  apiVersion: extensions/v1beta1
+                  kind: Ingress
+                  metadata:
+                    name: {{ $.observed.composite.resource.metadata.name }}
+                    namespace: {{ $.observed.composite.resource.spec.appNamespace }}
+                    annotations:
+                      alb.ingress.kubernetes.io/scheme: internet-facing
+                      alb.ingress.kubernetes.io/target-type: ip
+                  spec:
+                    ingressClassName: {{ $.observed.composite.resource.spec.ingress.className }}
+                    rules:
+                      {{- if $.observed.composite.resource.spec.ingress.host }}
+                      - host: {{ $.observed.composite.resource.spec.ingress.host | quote }}
+                        http:
+                      {{- else }}
+                      - http:
+                      {{- end }}
+                          paths:
+                          - pathType: Prefix
+                            path: /
+                            backend:
+                              service:
+                                name: {{ $.observed.composite.resource.metadata.name }}
+                                port:
+                                  number: {{ $.observed.composite.resource.spec.service.port }}
+              providerConfigRef:
+                name: {{ $.observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            {{- end }}
+            {{- if .observed.composite.resource.spec.hpa.enabled }}
+            ---
+            apiVersion: kubernetes.crossplane.io/v1alpha2
+            kind: Object
+            metadata:
+              name: {{ $.observed.composite.resource.metadata.name }}-hpa
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.metadata.name }}-hpa"
+            spec:
+              forProvider:
+                manifest:
+                  apiVersion: autoscaling/v2beta2
+                  kind: HorizontalPodAutoscaler
+                  metadata:
+                    name: {{ $.observed.composite.resource.metadata.name }}
+                    namespace: {{ $.observed.composite.resource.spec.appNamespace }}
+                  spec:
+                    scaleTargetRef:
+                      apiVersion: apps/v1
+                      kind: Deployment
+                      name: {{ $.observed.composite.resource.metadata.name }}
+                    minReplicas: {{ $.observed.composite.resource.spec.hpa.min }}
+                    maxReplicas: {{ $.observed.composite.resource.spec.hpa.max }}
+                    metrics:
+                      {{- if $.observed.composite.resource.spec.hpa.targetCPU }}
+                      - type: Resource
+                        resource:
+                          name: cpu
+                          targetAverageUtilization: {{ $.observed.composite.resource.spec.hpa.targetCPU }}
+                      {{- end }}
+                      {{- if $.observed.composite.resource.spec.hpa.targetMemory }}
+                      - type: Resource
+                        resource:
+                          name: memory
+                          targetAverageUtilization: {{ $.observed.composite.resource.spec.hpa.targetMemory }}
+                      {{- end }}
+              providerConfigRef:
+                name: {{ $.observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            {{- end }}
+            # create providerconfigusage
+            {{- $baseList := list "namespace" "deployment" "service" }}
+            {{- if .observed.composite.resource.spec.ingress.enabled }}{{- $baseList = append $baseList "ingress" }}{{- end }}
+            {{- if .observed.composite.resource.spec.hpa.enabled }}{{- $baseList = append $baseList "hpa" }}{{- end }}
+            {{- range $baseList }}
+            ---
+            apiVersion: helm.crossplane.io/v1beta1
+            kind: ProviderConfigUsage
+            metadata:
+              name: {{ $.observed.composite.resource.metadata.name }}-{{ . }}
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ $.observed.composite.resource.metadata.name }}-{{ . }}"
+            providerConfigRef:
+              name: {{ $.observed.composite.resource.spec.targetCluster }}-kubernetes-provider
+            resourceRef:
+              apiVersion: kubernetes.crossplane.io/v1alpha2
+              kind: Object
+              name: {{ $.observed.composite.resource.metadata.name }}-{{ . }}
+            {{- end }}
+    - step: automatically-detect-ready-composed-resources
+      functionRef:
+        name: function-auto-ready

@@ -34,14 +34,22 @@ spec:
       # configurationValues: '{"replicaCount": 1}'
     - name: metrics-server
       # configurationValues: '{"replicas": 1}'
-  externalAddons: #Supported external addons: aws-load
+  externalAddons: #Supported external addons: aws-load-balancer-controller
     - name: aws-load-balancer-controller
       version: "1.12.0" # Version of the external addon (optional)
       values:
         fullnameOverride: aws-load-balancer-controller
+        livenessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /healthz
+            port: 61779
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
         # clusterName: crossplane-eks-cluster # Auto added
         # region: us-east-1 # Auto added
-        # vpcID: vpc-<> # Auto added
+        # vpcId: vpc-<> # Auto added
   tags:  # Tags to be applied to the Every resources
     created_by: oopsmyops
     project_name: poc

@@ -1,0 +1,80 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xapps.aws.cloud.iac
+spec:
+  group: aws.cloud.iac  # API group for the custom resource
+  names:
+    kind: XApp  # Kind of the custom resource
+    plural: xapps  # Plural name of the custom resource
+  claimNames:
+    kind: AppClaim  # Kind of the claim
+    plural: appclaims  # Plural name of the claim
+  versions:
+  - name: v1alpha1  # available versions: v1alpha1, v1beta1, v1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              targetCluster:
+                type: string
+              appNamespace:
+                type: string
+              image:
+                type: object
+                properties:
+                  repository:
+                    type: string
+                  tag:
+                    type: string
+                required:
+                  - repository
+                  - tag
+              service:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  port:
+                    type: integer
+                required:
+                  - port
+              ingress:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+                properties:
+                  enabled:
+                    type: boolean
+                  className:
+                    type: string
+                  host:
+                    type: string
+                required:
+                  - enabled
+                  - className
+              hpa:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  min:
+                    type: integer
+                  max:
+                    type: integer
+                  targetCPU:
+                    type: integer
+                  targetMemory:
+                    type: integer
+                required:
+                  - enabled
+                  - min
+                  - max
+            required:
+              - targetCluster
+              - appNamespace
+              - image
+              - service
