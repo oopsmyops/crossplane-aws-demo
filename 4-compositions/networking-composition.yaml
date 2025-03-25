@@ -75,11 +75,19 @@ spec:
                 vpcIdSelector:
                   matchControllerRef: true
                 cidrBlock: {{ $subnet.cidr }}
+                {{- if eq $subnet.type "public" }}
+                mapPublicIpOnLaunch: true
+                {{- end }}
                 tags:
                 {{ range $key, $value := $.observed.composite.resource.spec.tags }}
                   {{ $key }}: {{ $value }}
                 {{ end }}
                   Name: {{ $.observed.composite.resource.spec.name }}-{{ $subnet.type }}-subnet-{{ add $subnet.index 1 }}
+                {{- if eq $subnet.type "public" }}
+                  kubernetes.io/role/elb: "1"
+                {{- else if eq $subnet.type "private" }}
+                  kubernetes.io/role/internal-elb: "1"
+                {{- end }}
               initProvider:
                 tags:
                   creation_date: {{ now.Format "02-01-06" }}

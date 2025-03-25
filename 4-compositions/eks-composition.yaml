@@ -455,7 +455,7 @@ spec:
                 values:
                   clusterName: {{ $.observed.composite.resource.spec.name }}
                   region: {{ $.observed.composite.resource.spec.region }}
-                  vpcId: {{ ( index $.observed.resources $.observed.composite.resource.spec.name ).resource.status.atProvider.vpcConfig.clusterSecurityGroupId }}
+                  vpcId: {{ ( index $.observed.resources $.observed.composite.resource.spec.name ).resource.status.atProvider.vpcConfig.vpcId }}
                   serviceAccount:
                     create: true
                   {{ if .values }}
