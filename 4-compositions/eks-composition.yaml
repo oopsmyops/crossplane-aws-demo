@@ -164,6 +164,29 @@ spec:
               initProvider:
                 tags:
                   creation_date: {{ now.Format "02-01-06" }}
+            ---
+            apiVersion: ec2.aws.upbound.io/v1beta2
+            kind: LaunchTemplate
+            metadata:
+              name: {{ .observed.composite.resource.spec.name }}-nodegroup-launch-template
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nodegroup-launch-template"
+            spec:
+              forProvider:
+                tagSpecifications:
+                  - resourceType: instance
+                    tags:
+                      Name: {{ .observed.composite.resource.spec.name }}-node-
+                metadataOptions:
+                  httpPutResponseHopLimit: 2
+                tags:
+                  Name : {{ .observed.composite.resource.spec.name }}-nodegroup-launch-template
+                  {{ range $key, $value := .observed.composite.resource.spec.tags }}
+                    {{ $key }}: {{ $value }}
+                  {{ end }}
+              initProvider:
+                tags:
+                  creation_date: {{ now.Format "02-01-06" }}
             {{/* Nodegroup */}}
             {{- range .observed.composite.resource.spec.nodegroups }}
             ---
@@ -181,6 +204,8 @@ spec:
                 nodeRoleArnRef:
                   name: {{ $.observed.composite.resource.spec.name }}-nodegroup-role
                 region: {{ $.observed.composite.resource.spec.region }}
+                launchTemplate:
+                  name: {{ $.observed.composite.resource.spec.name }}-nodegroup-launch-template
                 instanceTypes:
                   - {{ .instanceType | default "t3.micro" }}
                 diskSize: {{ .diskSize | default "20" }}
@@ -459,4 +484,3 @@ spec:
     - step: automatically-detect-ready-composed-resources
       functionRef:
         name: function-auto-ready
-

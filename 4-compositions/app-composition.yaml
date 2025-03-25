@@ -186,7 +186,7 @@ spec:
             {{- if .observed.composite.resource.spec.hpa.enabled }}{{- $baseList = append $baseList "hpa" }}{{- end }}
             {{- range $baseList }}
             ---
-            apiVersion: helm.crossplane.io/v1beta1
+            apiVersion: kubernetes.crossplane.io/v1alpha1
             kind: ProviderConfigUsage
             metadata:
               name: {{ $.observed.composite.resource.metadata.name }}-{{ . }}-pcu

@@ -6,7 +6,7 @@ metadata:
   name: crossplane-vpc  # Name of the custom resource instance
   namespace: default
 spec:
-  name: crossplane-vpc  # ID of the VPC
+  name: crossplane-vpc  # Name of the VPC and prefix for other resources
   region: us-east-1  # Region value to be used by the Composition
   cidrBlock: 110.1.0.0/16  # CIDR block to be used by the Composition
   publicSubnetCidrs:

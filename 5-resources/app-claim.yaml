@@ -10,12 +10,12 @@ spec:
     tag: latest
   service:
     port: 80
-  ingress:
-    enabled: false
-    className: alb
-    host: ""
   hpa:
     enabled: true
     min: 1
     max: 2
     targetCPU: 70
+  ingress:
+    enabled: false
+    className: alb
+    host: ""
