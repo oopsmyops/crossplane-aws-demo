@@ -173,16 +173,18 @@ spec:
                 gotemplating.fn.crossplane.io/composition-resource-name: "{{ .observed.composite.resource.spec.name }}-nodegroup-launch-template"
             spec:
               forProvider:
+                name: {{ .observed.composite.resource.spec.name }}-nodegroup-launch-template
+                region: {{ .observed.composite.resource.spec.region }}
+                metadataOptions:
+                  httpPutResponseHopLimit: 2
                 tagSpecifications:
                   - resourceType: instance
                     tags:
                       Name: {{ .observed.composite.resource.spec.name }}-node-
-                metadataOptions:
-                  httpPutResponseHopLimit: 2
                 tags:
-                  Name : {{ .observed.composite.resource.spec.name }}-nodegroup-launch-template
+                  Name: {{ .observed.composite.resource.spec.name }}-nodegroup-launch-template
                   {{ range $key, $value := .observed.composite.resource.spec.tags }}
-                    {{ $key }}: {{ $value }}
+                  {{ $key }}: {{ $value }}
                   {{ end }}
               initProvider:
                 tags:
@@ -208,7 +210,6 @@ spec:
                   name: {{ $.observed.composite.resource.spec.name }}-nodegroup-launch-template
                 instanceTypes:
                   - {{ .instanceType | default "t3.micro" }}
-                diskSize: {{ .diskSize | default "20" }}
                 forceUpdateVersion: true
                 subnetIdSelector:
                   matchLabels:
