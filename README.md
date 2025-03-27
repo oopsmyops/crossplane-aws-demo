@@ -1,4 +1,4 @@
-# Crossplane2 Workspace
+# Crossplane Workspace
 
 This repository contains configurations and resources for managing infrastructure using Crossplane. The structure of the repository is organized to facilitate the deployment and management of various cloud resources.
 
