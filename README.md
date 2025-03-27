@@ -37,6 +37,37 @@ This repository contains configurations and resources for managing infrastructur
 3. **Create Compositions**: Apply the compositions in the `4-compositions` folder to define how the composite resources should be composed.
 4. **Claim Resources**: Use the resource claims in the `5-resources` folder to create instances of the composite resources.
 
+```
+helm repo add crossplane-stable https://charts.crossplane.io/stable
+helm repo update
+helm install crossplane \
+--namespace crossplane-system \
+--create-namespace crossplane-stable/crossplane
+```
+
+```
+kubectl apply -f 1-providers-and-functions
+kubectl apply -f 2-providerconfig
+kubectl apply -f 3-xrds
+kubectl apply -f 4-compositions
+```
+Wait for everything to be ready
+```
+kubectl apply -f 5-resources
+```
+watch the progress with the following commands:
+```
+watch "crossplane beta trace vpcclaims.aws.cloud.iac/crossplane-vpc"
+
+watch "crossplane beta trace eksclaim.aws.cloud.iac/crossplane-eks-cluster"
+
+watch "crossplane beta trace appclaim.aws.cloud.iac/game-2048"
+
+watch "kubectl get managed"
+```
+### Deletion
+Delete the claims first and wait for all resource to be destroyed before deleting other components like compositions, xrds, etc
+
 ## Acknowledgments
 
 - [Crossplane](https://crossplane.io/) - The open-source project for managing cloud infrastructure.
